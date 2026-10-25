@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beden & FitGöz AI - Akıllı Beden, Postür ve Kalori Asistanı (TÜBİTAK 2204-B)</title>
+    <!-- Google Fonts & Font Awesome -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+
+    <!-- MediaPipe Pose ve Kamera Kütüphaneleri -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Sol Kontrol ve Bilgi Paneli -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-badge">TÜBİTAK 2204-B</div>
+                <h2>Beden & FitGöz AI</h2>
+                <p class="subtitle">Biyometrik Beden Ölçümü ve Otomatik Kalori/Egzersiz Takip Asistanı</p>
+            </div>
+
+            <!-- Mod Seçici -->
+            <div class="mode-tabs">
+                <button class="mode-btn active" id="tab-measure" data-mode="measure">
+                    <span>👗</span> Beden Ölçümü
+                </button>
+                <button class="mode-btn" id="tab-fitness" data-mode="fitness">
+                    <span>🔥</span> Egzersiz & Kalori
+                </button>
+            </div>
+
+            <!-- Kullanıcı Parametreleri Formu -->
+            <div class="card settings-card">
+                <h3><span class="icon">⚙️</span> Biyometrik Parametreler</h3>
+                
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label for="user-height">Boy (cm):</label>
+                        <div class="input-with-unit">
+                            <input type="number" id="user-height" value="175" min="110" max="230">
+                            <span class="unit">cm</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="user-weight">Kilo (kg):</label>
+                        <div class="input-with-unit">
+                            <input type="number" id="user-weight" value="68" min="30" max="180">
+                            <span class="unit">kg</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label for="user-age">Yaş:</label>
+                        <input type="number" id="user-age" value="15" min="8" max="90">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="user-gender">Cinsiyet:</label>
+                        <select id="user-gender">
+                            <option value="erkek">Erkek</option>
+                            <option value="kadin">Kadın</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="activity-level">Günlük Aktivite Seviyesi:</label>
+                    <select id="activity-level">
+                        <option value="1.2">Hareketsiz / Masa Başı</option>
+                        <option value="1.375" selected>Hafif Aktif (1-3 gün spor)</option>
+                        <option value="1.55">Orta Aktif (3-5 gün spor)</option>
+                        <option value="1.725">Çok Aktif / Sporcu</option>
+                    </select>
+                </div>
+
+                <!-- Egzersiz Seçimi (Fitness Modunda Aktif) -->
+                <div class="form-group" id="exercise-select-group">
+                    <label for="exercise-type">Canlı Takip Edilecek Hareket:</label>
+                    <select id="exercise-type">
+                        <option value="squat">Squat (Çömelme - Bacak & Kalça)</option>
+                        <option value="jumping_jack">Jumping Jack (Zıplama)</option>
+                    </select>
+                </div>
+
+                <button id="toggle-camera-btn" class="btn btn-primary">
+                    <span id="btn-icon">📷</span> <span id="btn-text">Kamerayı Başlat</span>
+                </button>
+            </div>
+
+            <!-- Kamera ve Telefon Bilgilendirmesi -->
+            <div class="card info-card">
+                <h4><span class="icon">📱</span> Telefon Kamerasını Bağlama</h4>
+                <p>Kameranız yoksa telefonunuza ve bilgisayarınıza <strong>Iriun Webcam</strong> kurup aynı ağa bağlayarak telefon kamerasını hemen kullanabilirsiniz.</p>
+                <div class="tag-row">
+                    <span class="tag">Iriun Webcam</span>
+                    <span class="tag">DroidCam</span>
+                    <span class="tag">USB / Wi-Fi</span>
+                </div>
+            </div>
+
+            <!-- KVKK ve Gizlilik Notu -->
+            <div class="card privacy-card">
+                <div class="privacy-header">
+                    <span class="shield">🛡️</span>
+                    <strong>KVKK & Veri Gizliliği</strong>
+                </div>
+                <p>Görüntüler hiçbir sunucuya yüklenmez, yapay zeka çıkarımları doğrudan tarayıcınızda (yerel) çalışır.</p>
+            </div>
+        </aside>
+
+        <!-- Sağ Ana İçerik: Kamera Görüntüsü ve Analiz Sonuçları -->
+        <main class="main-content">
+            <!-- Üst Durum Çubuğu -->
+            <header class="status-bar">
+                <div class="status-indicator">
+                    <span class="dot" id="status-dot"></span>
+                    <span id="status-text">Kamera bekleniyor... Başlat düğmesine tıklayın.</span>
+                </div>
+                <div class="fps-counter" id="fps-counter">FPS: 0</div>
+            </header>
+
+            <!-- Video Görüntüleme ve İskelet Çizim Alanı -->
+            <div class="camera-stage">
+                <video id="webcam" playsinline></video>
+                <canvas id="output-canvas" width="640" height="480"></canvas>
+                
+                <!-- Canlı Egzersiz / Kalori HUD Overlay (Kamera Üzeri Gösterge) -->
+                <div class="exercise-hud" id="exercise-hud">
+                    <div class="hud-item">
+                        <span class="hud-label">Tekrar (Rep)</span>
+                        <span class="hud-val" id="hud-rep-count">0</span>
+                    </div>
+                    <div class="hud-item flame">
+                        <span class="hud-label">Yakılan Kalori</span>
+                        <span class="hud-val" id="hud-calories">0.00 <small>kcal</small></span>
+                    </div>
+                    <div class="hud-item">
+                        <span class="hud-label">Diz Açısı</span>
+                        <span class="hud-val" id="hud-angle">--°</span>
+                    </div>
+                </div>
+
+                <!-- Kılavuz Çerçeve / Hizalama Maskesi -->
+                <div class="guidance-overlay" id="guidance-overlay">
+                    <div class="alignment-box">
+                        <div class="head-zone">Kafa Hizası</div>
+                        <div class="shoulder-line"></div>
+                        <div class="feet-zone">Ayak Hizası</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analiz Kartları Izgarası -->
+            <div class="analysis-grid">
+                <!-- 1. Beden Karar Kartı -->
+                <div class="card result-card" id="card-size-decision">
+                    <div class="result-header">
+                        <span class="badge">Beden Asistanı</span>
+                        <h4>Önerilen Beden</h4>
+                    </div>
+                    <div class="size-display">
+                        <span class="size-letter" id="recommended-size">--</span>
+                        <span class="size-fit" id="fit-type">Ölçüm bekleniyor</span>
+                    </div>
+                    <div class="confidence-bar-container">
+                        <div class="confidence-label">
+                            <span>Eşleşme Güveni:</span>
+                            <span id="confidence-pct">%0</span>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-fill" id="confidence-bar" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Canlı Egzersiz ve Yakılan Kalori Kartı -->
+                <div class="card calorie-burn-card" id="card-exercise-calorie">
+                    <div class="result-header">
+                        <span class="badge flame-badge">🔥 Anlık Kalori Takibi</span>
+                        <h4>Egzersiz & Kalori</h4>
+                    </div>
+                    <div class="burn-stats-row">
+                        <div class="burn-stat">
+                            <span class="stat-number" id="rep-display">0</span>
+                            <span class="stat-title">Tekrar</span>
+                        </div>
+                        <div class="burn-divider"></div>
+                        <div class="burn-stat">
+                            <span class="stat-number highlight-burn" id="burned-calories-display">0.0</span>
+                            <span class="stat-title">Yakılan kcal</span>
+                        </div>
+                    </div>
+                    <div class="exercise-feedback" id="exercise-feedback">
+                        Kamera karşısına geçin ve hareketi başlatın.
+                    </div>
+                    <button class="btn btn-sm btn-outline" id="reset-counter-btn">
+                        🔄 Sayacı Sıfırla
+                    </button>
+                </div>
+
+                <!-- 3. Günlük Metabolizma ve Kalori İhtiyacı Kartı (BMR & TDEE) -->
+                <div class="card metabolism-card">
+                    <div class="result-header">
+                        <span class="badge">Metabolizma Profili</span>
+                        <h4>Günlük Kalori İhtiyacı</h4>
+                    </div>
+                    <ul class="metrics-list">
+                        <li>
+                            <span class="label">Bazal Metabolizma (BMR):</span>
+                            <span class="val" id="val-bmr">-- kcal</span>
+                        </li>
+                        <li>
+                            <span class="label">Günlük İhtiyaç (TDEE):</span>
+                            <span class="val highlight" id="val-tdee">-- kcal</span>
+                        </li>
+                        <li>
+                            <span class="label">Vücut Kitle İndeksi (VKİ):</span>
+                            <span class="val" id="val-bmi">--</span>
+                        </li>
+                        <li>
+                            <span class="label">Kilo / Sağlık Durumu:</span>
+                            <span class="val" id="val-bmi-status">--</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- 4. Biyometrik Ölçüm Metrikleri Kartı -->
+                <div class="card metrics-card">
+                    <h4>Biyometrik Ölçümler (cm)</h4>
+                    <ul class="metrics-list">
+                        <li>
+                            <span class="label">Omuz Genişliği (Biacromial):</span>
+                            <span class="val" id="metric-shoulder">-- cm</span>
+                        </li>
+                        <li>
+                            <span class="label">Tahmini Göğüs Çevresi:</span>
+                            <span class="val" id="metric-chest">-- cm</span>
+                        </li>
+                        <li>
+                            <span class="label">Ölçek Katsayısı:</span>
+                            <span class="val" id="metric-scale">-- mm / px</span>
+                        </li>
+                        <li>
+                            <span class="label">Duruş & Simetri:</span>
+                            <span class="val" id="metric-posture">--</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Uygulama Mantığı -->
+    <script src="app.js"></script>
+</body>
+</html>
